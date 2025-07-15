@@ -18,11 +18,10 @@ function isValidDate(str) {
   return /^\d{8}$/.test(str);
 }
 
-// ✅ 주요 라우트
+// ✅ 주요 라우트: 실시간 수온 조회 및 저장
 app.get('/api/sea-temp', async (req, res) => {
   const { obsCode, date } = req.query;
 
-  // ✅ 입력 유효성 검증
   if (!obsCode || !date || !isValidDate(date)) {
     return res.status(400).json({ error: '필수 쿼리(obsCode, date)가 잘못됨' });
   }
@@ -33,22 +32,21 @@ app.get('/api/sea-temp', async (req, res) => {
     const response = await axios.get(apiUrl);
     const result = response.data;
 
-    // ✅ 데이터가 있으면 Firebase 저장
     if (result.result?.data?.length) {
       console.log("🔥 Firebase 저장 시도 중...");
-      try{
-      const docRef = db.collection('sea_temperature').doc(`${obsCode}_${date}`);
-      await docRef.set({
-        obsCode,
-        date,
-        fetchedAt: new Date().toISOString(),
-        data: result.result.data
-      });
-      console.log("✅ Firebase 저장 완료");
+      try {
+        const docRef = db.collection('sea_temperature').doc(`${obsCode}_${date}`);
+        await docRef.set({
+          obsCode,
+          date,
+          fetchedAt: new Date().toISOString(),
+          data: result.result.data
+        });
+        console.log("✅ Firebase 저장 완료");
       } catch (e) {
-      console.error("❌ Firebase 저장 실패:", e.message);
-      }      
-    } 
+        console.error("❌ Firebase 저장 실패:", e.message);
+      }
+    }
 
     res.json(result);
   } catch (error) {
@@ -57,6 +55,35 @@ app.get('/api/sea-temp', async (req, res) => {
       error: 'KHOA API 요청 실패',
       detail: error.message,
     });
+  }
+});
+
+// ✅ 동해/서해/남해 카테고리별 데이터 일괄 저장
+app.post('/api/sea-data/bulk-insert', async (req, res) => {
+  const seaData = req.body; // JSON 객체 { eastSea: {...}, westSea: {...}, southSea: {...} }
+  if (!seaData || typeof seaData !== 'object') {
+    return res.status(400).json({ error: '올바른 seaData JSON이 필요함' });
+  }
+
+  try {
+    for (const sea of Object.keys(seaData)) {
+      const seaRef = db.collection('seas').doc(sea); // ex) 'eastSea'
+
+      for (const category of Object.keys(seaData[sea])) {
+        const dataList = seaData[sea][category];
+        const categoryRef = seaRef.collection(category);
+
+        for (const dataPoint of dataList) {
+          await categoryRef.doc(dataPoint.date).set({
+            value: dataPoint.value,
+          });
+        }
+      }
+    }
+    res.json({ success: true, message: '카테고리별 데이터 저장 완료' });
+  } catch (error) {
+    console.error('🔥 Firebase bulk 저장 오류:', error.message);
+    res.status(500).json({ error: 'Firebase 저장 중 오류 발생', detail: error.message });
   }
 });
 
