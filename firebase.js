@@ -2,7 +2,7 @@
 const admin = require('firebase-admin');
 
 // Render에서는 환경변수에 서비스 계정 JSON 전체를 문자열로 저장하고 사용
-const serviceAccount = JSON.parse(process.env.FIREBASE_KEY_JSON);  // 환경변수에서 파싱
+const serviceAccount = JSON.parse(process.env.FIREBASE_KEY);  // 환경변수에서 파싱
 
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount),
