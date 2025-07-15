@@ -5,20 +5,20 @@ const db = require('./firebase'); // 🔥 Firebase 연동
 
 const app = express();
 app.use(cors());
-app.use(express.json()); // ⚠️ POST 요청 대비 JSON 파싱
+app.use(express.json());
 
 const API_KEY = process.env.API_KEY;
 if (!API_KEY) {
   console.error("❌ API_KEY 환경변수가 설정되지 않았습니다.");
-  process.exit(1); // 실행 중단
+  process.exit(1);
 }
 
-// ✅ 유틸 함수: 날짜 형식 검사
+// ✅ 유틸 함수
 function isValidDate(str) {
   return /^\d{8}$/.test(str);
 }
 
-// ✅ 주요 라우트: 실시간 수온 조회 및 저장
+// ✅ 실시간 수온 조회 및 저장
 app.get('/api/sea-temp', async (req, res) => {
   const { obsCode, date } = req.query;
 
@@ -60,14 +60,14 @@ app.get('/api/sea-temp', async (req, res) => {
 
 // ✅ 동해/서해/남해 카테고리별 데이터 일괄 저장
 app.post('/api/sea-data/bulk-insert', async (req, res) => {
-  const seaData = req.body; // JSON 객체 { eastSea: {...}, westSea: {...}, southSea: {...} }
+  const seaData = req.body;
   if (!seaData || typeof seaData !== 'object') {
     return res.status(400).json({ error: '올바른 seaData JSON이 필요함' });
   }
 
   try {
     for (const sea of Object.keys(seaData)) {
-      const seaRef = db.collection('seas').doc(sea); // ex) 'eastSea'
+      const seaRef = db.collection('seas').doc(sea);
 
       for (const category of Object.keys(seaData[sea])) {
         const dataList = seaData[sea][category];
@@ -87,13 +87,45 @@ app.post('/api/sea-data/bulk-insert', async (req, res) => {
   }
 });
 
-// ✅ 기본 루트 확인용
+// ✅ 월별 평균 수온 계산 API
+app.get('/api/monthly-average', async (req, res) => {
+  const region = req.query.region; // ex) eastSea, westSea, southSea
+  if (!region) {
+    return res.status(400).json({ error: 'region 쿼리 파라미터가 필요합니다.' });
+  }
+
+  try {
+    const snapshot = await db.collection('seas').doc(region).collection('temperature').get();
+    const monthlyData = {};
+
+    snapshot.forEach(doc => {
+      const { value } = doc.data();
+      const month = doc.id.slice(4, 6); // '20250715' => '07'
+      if (!monthlyData[month]) monthlyData[month] = [];
+      monthlyData[month].push(value);
+    });
+
+    const averages = Object.entries(monthlyData).map(([month, values]) => {
+      const sum = values.reduce((a, b) => a + b, 0);
+      const avg = +(sum / values.length).toFixed(2);
+      return { month: parseInt(month), avgTemp: avg };
+    }).sort((a, b) => a.month - b.month);
+
+    res.json({ region, averages });
+  } catch (error) {
+    console.error('🔥 월별 평균 수온 계산 실패:', error.message);
+    res.status(500).json({ error: '월별 평균 계산 오류', detail: error.message });
+  }
+});
+
+// ✅ 루트
 app.get('/', (req, res) => {
   res.send('🌊 Three-Seas 서버 작동 중입니다.');
 });
 
-// ✅ 서버 시작
+// ✅ 서버 실행
 const port = process.env.PORT || 3000;
 app.listen(port, () => {
   console.log(`🚀 서버 실행 중 on port ${port}`);
 });
+ㄴ
