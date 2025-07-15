@@ -36,6 +36,7 @@ app.get('/api/sea-temp', async (req, res) => {
     // ✅ 데이터가 있으면 Firebase 저장
     if (result.result?.data?.length) {
       console.log("🔥 Firebase 저장 시도 중...");
+      try{
       const docRef = db.collection('sea_temperature').doc(`${obsCode}_${date}`);
       await docRef.set({
         obsCode,
@@ -43,7 +44,11 @@ app.get('/api/sea-temp', async (req, res) => {
         fetchedAt: new Date().toISOString(),
         data: result.result.data
       });
-    }
+      console.log("✅ Firebase 저장 완료");
+      } catch (e) {
+      console.error("❌ Firebase 저장 실패:", e.message);
+      }      
+    } 
 
     res.json(result);
   } catch (error) {
